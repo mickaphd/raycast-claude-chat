@@ -1,0 +1,153 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "claude-code-chat",
+  "title": "Claude Chat",
+  "description": "Chat with Claude and fix grammar in Raycast using your Claude Pro or Max plan, through Claude Code. No API key needed.",
+  "icon": "extension-icon.png",
+  "author": "mickaphd",
+  "platforms": [
+    "macOS"
+  ],
+  "categories": [
+    "Productivity"
+  ],
+  "license": "MIT",
+  "commands": [
+    {
+      "name": "ask-claude",
+      "title": "Ask Claude",
+      "description": "Chat with Claude, with your conversation history",
+      "mode": "view",
+      "preferences": [
+        {
+          "name": "model",
+          "title": "Model",
+          "description": "Model used by Claude Code",
+          "type": "dropdown",
+          "required": false,
+          "default": "",
+          "data": [
+            {
+              "title": "Claude Code Default",
+              "value": ""
+            },
+            {
+              "title": "Fable",
+              "value": "fable"
+            },
+            {
+              "title": "Opus",
+              "value": "opus"
+            },
+            {
+              "title": "Sonnet",
+              "value": "sonnet"
+            },
+            {
+              "title": "Haiku",
+              "value": "haiku"
+            }
+          ]
+        },
+        {
+          "name": "effort",
+          "title": "Effort",
+          "description": "Reasoning effort (lower is faster and uses less of your quota)",
+          "type": "dropdown",
+          "required": false,
+          "default": "",
+          "data": [
+            {
+              "title": "Claude Code Default",
+              "value": ""
+            },
+            {
+              "title": "Low",
+              "value": "low"
+            },
+            {
+              "title": "Medium",
+              "value": "medium"
+            },
+            {
+              "title": "High",
+              "value": "high"
+            },
+            {
+              "title": "Max",
+              "value": "max"
+            }
+          ]
+        },
+        {
+          "name": "systemPrompt",
+          "title": "System Prompt",
+          "description": "Replaces the default system prompt",
+          "type": "textfield",
+          "required": false
+        }
+      ]
+    },
+    {
+      "name": "fix-grammar",
+      "title": "Fix Grammar",
+      "description": "Fix spelling and grammar in the selected text, in place",
+      "mode": "no-view",
+      "preferences": [
+        {
+          "name": "model",
+          "title": "Model",
+          "description": "Model used for corrections",
+          "type": "dropdown",
+          "required": false,
+          "default": "haiku",
+          "data": [
+            {
+              "title": "Haiku",
+              "value": "haiku"
+            },
+            {
+              "title": "Sonnet",
+              "value": "sonnet"
+            },
+            {
+              "title": "Opus",
+              "value": "opus"
+            },
+            {
+              "title": "Fable",
+              "value": "fable"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "preferences": [
+    {
+      "name": "oauthToken",
+      "title": "OAuth Token",
+      "description": "Run `claude setup-token` in Terminal and paste the whole token here. Uses your Pro/Max plan, valid for one year. Revoke it in claude.ai → Settings → Claude Code.",
+      "type": "password",
+      "required": false,
+      "placeholder": "sk-ant-oat01-…"
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "^1.104.20"
+  },
+  "devDependencies": {
+    "@raycast/eslint-config": "^2.2.0",
+    "@types/node": "22.19.17",
+    "@types/react": "19.0.10",
+    "eslint": "^10.5.0",
+    "prettier": "^3.8.5",
+    "typescript": "^6.0.3"
+  },
+  "scripts": {
+    "build": "ray build",
+    "dev": "ray develop",
+    "fix-lint": "ray lint --fix",
+    "lint": "ray lint"
+  }
+}
