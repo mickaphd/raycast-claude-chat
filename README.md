@@ -5,7 +5,8 @@
 Chat with Claude from Raycast on your **Claude Pro or Max subscription**, without an API key.
 The extension runs the official [Claude Code](https://code.claude.com) CLI in headless mode (`claude -p`), so usage counts toward your plan's limits, never per-token API billing.
 
-> Unofficial and not on the Raycast Store. It works with a free Raycast account.
+> [!IMPORTANT]
+> This is an unofficial extension and it isn't published on the Raycast Store, where it would most likely be rejected: it lets you chat with Claude without an API key or a Raycast Pro subscription, and its Fix Grammar command recreates Raycast's own Fix Spelling and Grammar AI command. It works with a free Raycast account.
 
 ![Ask Claude: conversations on the left, the selected one on the right](media/chat.png)
 
