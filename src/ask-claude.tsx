@@ -47,12 +47,14 @@ function currentContext(): string {
   return `The user's local date and time when this conversation started: ${now} (${timeZone}).`;
 }
 
-function errorMarkdown(error: unknown): string {
+function errorMarkdown(error: unknown, hasToken: boolean): string {
   if (!(error instanceof ClaudeError)) return `**Error**\n\n\`\`\`\n${String(error)}\n\`\`\``;
   if (error.kind === "not-found") return INSTALL_HELP;
   if (error.kind === "aborted") return "_Stopped_";
   // Keep the CLI's own words so a misdetected error is still diagnosable.
-  const help = error.kind === "auth" ? `${AUTH_HELP}\n\nClaude Code said:` : "**Error**";
+  // Tell apart a missing token from a rejected one: the fixes differ.
+  const tokenState = hasToken ? "A token is set but Claude rejected it." : "No token is set in the preferences.";
+  const help = error.kind === "auth" ? `${AUTH_HELP}\n\n${tokenState} Claude Code said:` : "**Error**";
   return `${help}\n\n\`\`\`\n${error.message}\n\`\`\``;
 }
 
@@ -156,7 +158,7 @@ export default function AskClaude(props: LaunchProps) {
       update(conversation.id, (c) => ({ sessionId: result.sessionId ?? c.sessionId, updatedAt: Date.now() }));
     } catch (error) {
       flush();
-      updateTurn(conversation.id, turn.id, { error: errorMarkdown(error) });
+      updateTurn(conversation.id, turn.id, { error: errorMarkdown(error, Boolean(preferences.oauthToken?.trim())) });
     } finally {
       runRef.current = undefined;
       setStreamingTurnId(undefined);

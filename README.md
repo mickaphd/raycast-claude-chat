@@ -30,10 +30,10 @@ The extension runs the official [Claude Code](https://code.claude.com) CLI in he
 ```bash
 git clone https://github.com/mickaphd/raycast-claude-chat.git
 cd raycast-claude-chat
-npm install && npm run build
+npm install && npm run dev
 ```
 
-`npm run build` installs the extension into Raycast; it stays there like any other extension. Run it again after pulling updates.
+`npm run dev` registers the extension in Raycast. Once it prints `ready`, stop it with `Ctrl+C`: the extension stays installed. After pulling updates, run `npm run build`.
 
 Then create a long-lived token tied to your subscription and paste it in the extension's **OAuth Token** preference:
 
