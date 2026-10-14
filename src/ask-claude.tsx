@@ -21,7 +21,7 @@ import { ClaudeError, RunHandle, runClaude } from "./lib/claude-cli";
 import { conversationTitle, conversationToMarkdown, threadMarkdown, transcriptPrompt } from "./lib/markdown";
 import { Conversation, Turn, loadConversations, newConversation, newTurn, saveConversations } from "./lib/storage";
 
-const DEFAULT_SYSTEM_PROMPT =
+const SYSTEM_PROMPT =
   "You are Claude, a helpful AI assistant made by Anthropic. The user is chatting with you from Raycast, a macOS launcher. " +
   "Format answers in Markdown. Be clear and reasonably concise. Reply in the language the user writes in.";
 
@@ -47,12 +47,17 @@ function currentContext(): string {
   return `The user's local date and time when this conversation started: ${now} (${timeZone}).`;
 }
 
+// "" means Claude Code's default model, which the CLI doesn't name up front.
+const modelName = (model: string) => model.charAt(0).toUpperCase() + model.slice(1);
+
+// The fixed "New Conversation" item: sending from it creates a conversation and selects it.
+const NEW_ID = "new";
+
 function errorMarkdown(error: unknown, hasToken: boolean): string {
   if (!(error instanceof ClaudeError)) return `**Error**\n\n\`\`\`\n${String(error)}\n\`\`\``;
   if (error.kind === "not-found") return INSTALL_HELP;
   if (error.kind === "aborted") return "_Stopped_";
-  // Keep the CLI's own words so a misdetected error is still diagnosable.
-  // Tell apart a missing token from a rejected one: the fixes differ.
+  // A missing token and a rejected one need different fixes; the CLI's own words follow for diagnosis.
   const tokenState = hasToken ? "A token is set but Claude rejected it." : "No token is set in the preferences.";
   const help = error.kind === "auth" ? `${AUTH_HELP}\n\n${tokenState} Claude Code said:` : "**Error**";
   return `${help}\n\n\`\`\`\n${error.message}\n\`\`\``;
@@ -60,27 +65,23 @@ function errorMarkdown(error: unknown, hasToken: boolean): string {
 
 export default function AskClaude(props: LaunchProps) {
   const preferences = getPreferenceValues<Preferences.AskClaude>();
-  // The list always holds exactly one empty "draft" conversation, shown as "New Conversation".
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [currentId, setCurrentId] = useState<string>();
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [currentId, setCurrentId] = useState(NEW_ID);
   const [searchText, setSearchText] = useState("");
   const [streamingTurnId, setStreamingTurnId] = useState<string>();
   const [status, setStatus] = useState<string>();
   const runRef = useRef<RunHandle>(undefined);
 
-  const draft = conversations.find((c) => c.turns.length === 0);
-  const history = conversations.filter((c) => c.turns.length > 0).sort((a, b) => b.updatedAt - a.updatedAt);
   const current = conversations.find((c) => c.id === currentId);
-  const isLoaded = draft !== undefined;
 
   useEffect(() => {
     // Always open on "New Conversation": earlier ones are one arrow key away.
     loadConversations().then((stored) => {
-      const newDraft = newConversation();
+      setConversations(stored);
+      setIsLoaded(true);
       const fallback = props.fallbackText?.trim();
-      setConversations([newDraft, ...stored]);
-      setCurrentId(newDraft.id);
-      if (fallback) send(fallback, newDraft);
+      if (fallback) send(fallback);
     });
     return () => runRef.current?.abort();
   }, []);
@@ -91,25 +92,29 @@ export default function AskClaude(props: LaunchProps) {
   }, [conversations, isLoaded, streamingTurnId]);
 
   function update(conversationId: string, change: (c: Conversation) => Partial<Conversation>) {
-    setConversations((list) => {
-      const updated = list.map((c) => (c.id === conversationId ? { ...c, ...change(c) } : c));
-      // Once the draft receives its first message, a fresh draft takes its place.
-      return updated.some((c) => c.turns.length === 0) ? updated : [newConversation(), ...updated];
-    });
+    setConversations((list) => list.map((c) => (c.id === conversationId ? { ...c, ...change(c) } : c)));
   }
 
   function updateTurn(conversationId: string, turnId: string, change: Partial<Turn>) {
     update(conversationId, (c) => ({ turns: c.turns.map((t) => (t.id === turnId ? { ...t, ...change } : t)) }));
   }
 
-  async function send(prompt: string, conversation: Conversation, retryTurnId?: string) {
+  // Without a conversation (from "New Conversation"), the message starts a new one.
+  async function send(prompt: string, existing?: Conversation, retryTurnId?: string) {
     if (runRef.current) {
       await showToast({ style: Toast.Style.Failure, title: "Claude is still answering", message: "Stop it with ⌘." });
       return;
     }
-    const previousTurns = conversation.turns.filter((t) => t.id !== retryTurnId);
     const turn = newTurn(prompt);
-    update(conversation.id, () => ({ turns: [...previousTurns, turn], updatedAt: Date.now() }));
+    const previousTurns = existing?.turns.filter((t) => t.id !== retryTurnId) ?? [];
+    const conversation = existing ?? newConversation(turn);
+    if (existing) {
+      update(conversation.id, () => ({ turns: [...previousTurns, turn] }));
+    } else {
+      // Newest first; replies don't reorder, so the list never shifts under the selection.
+      setConversations((list) => [conversation, ...list]);
+      setCurrentId(conversation.id);
+    }
     setSearchText("");
     setStreamingTurnId(turn.id);
 
@@ -130,7 +135,7 @@ export default function AskClaude(props: LaunchProps) {
           sessionId,
           model: preferences.model,
           effort: preferences.effort,
-          systemPrompt: `${preferences.systemPrompt?.trim() || DEFAULT_SYSTEM_PROMPT}\n\n${currentContext()}`,
+          systemPrompt: `${SYSTEM_PROMPT}\n\n${currentContext()}`,
           // Terminals often insert spaces or line breaks when copying the wrapped token.
           oauthToken: preferences.oauthToken?.replace(/\s+/g, ""),
         },
@@ -155,7 +160,7 @@ export default function AskClaude(props: LaunchProps) {
       pendingText = undefined;
       flush();
       updateTurn(conversation.id, turn.id, { answer: result.text });
-      update(conversation.id, (c) => ({ sessionId: result.sessionId ?? c.sessionId, updatedAt: Date.now() }));
+      update(conversation.id, (c) => ({ sessionId: result.sessionId ?? c.sessionId }));
     } catch (error) {
       flush();
       updateTurn(conversation.id, turn.id, { error: errorMarkdown(error, Boolean(preferences.oauthToken?.trim())) });
@@ -170,11 +175,11 @@ export default function AskClaude(props: LaunchProps) {
     const streaming = conversations.find((c) => c.turns.some((t) => t.id === streamingTurnId));
     if (streaming && ids.includes(streaming.id)) runRef.current?.abort();
     setConversations((list) => list.filter((c) => !ids.includes(c.id)));
-    if (currentId && ids.includes(currentId)) setCurrentId(draft?.id);
+    if (ids.includes(currentId)) setCurrentId(NEW_ID);
   }
 
-  function actions(conversation: Conversation) {
-    const lastTurn = conversation.turns.at(-1);
+  function actions(conversation?: Conversation) {
+    const lastTurn = conversation?.turns.at(-1);
     const isIdle = lastTurn?.id !== streamingTurnId;
     const prompt = searchText.trim();
     return (
@@ -214,9 +219,9 @@ export default function AskClaude(props: LaunchProps) {
             title="New Conversation"
             icon={Icon.PlusCircle}
             shortcut={Keyboard.Shortcut.Common.New}
-            onAction={() => setCurrentId(draft?.id)}
+            onAction={() => setCurrentId(NEW_ID)}
           />
-          {lastTurn && (
+          {conversation && (
             <>
               <Action
                 title="Copy Conversation"
@@ -236,7 +241,7 @@ export default function AskClaude(props: LaunchProps) {
               />
             </>
           )}
-          {history.length > 0 && (
+          {conversations.length > 0 && (
             <Action
               title="Delete All Conversations"
               icon={Icon.Trash}
@@ -247,7 +252,7 @@ export default function AskClaude(props: LaunchProps) {
                   title: "Delete all conversations?",
                   primaryAction: { title: "Delete All", style: Alert.ActionStyle.Destructive },
                 });
-                if (confirmed) deleteConversations(history.map((c) => c.id));
+                if (confirmed) deleteConversations(conversations.map((c) => c.id));
               }}
             />
           )}
@@ -271,27 +276,26 @@ export default function AskClaude(props: LaunchProps) {
 
   return (
     <List
-      isLoading={!isLoaded || streamingTurnId !== undefined}
+      // Not tied to streaming: Raycast ignores selection changes made while loading, then reselects the first item.
+      isLoading={!isLoaded}
       filtering={false}
       searchText={searchText}
       onSearchTextChange={setSearchText}
-      searchBarPlaceholder={current?.turns.length ? "Reply to this conversation…" : "Ask Claude anything…"}
-      navigationTitle={status ? `Claude · ${status}` : "Claude"}
+      searchBarPlaceholder={current ? "Reply to this conversation…" : "Ask Claude anything…"}
+      navigationTitle={["Claude", modelName(preferences.model), status].filter(Boolean).join(" · ")}
       isShowingDetail
       selectedItemId={currentId}
       onSelectionChange={(id) => id && setCurrentId(id)}
     >
-      {draft && (
-        <List.Item
-          id={draft.id}
-          title="New Conversation"
-          icon={{ source: Icon.PlusCircle, tintColor: Color.Orange }}
-          detail={<List.Item.Detail markdown={WELCOME} />}
-          actions={actions(draft)}
-        />
-      )}
+      <List.Item
+        id={NEW_ID}
+        title="New Conversation"
+        icon={{ source: Icon.PlusCircle, tintColor: Color.Orange }}
+        detail={<List.Item.Detail markdown={WELCOME} />}
+        actions={actions()}
+      />
       <List.Section title="Conversations">
-        {history.map((conversation) => (
+        {conversations.map((conversation) => (
           <List.Item
             key={conversation.id}
             id={conversation.id}

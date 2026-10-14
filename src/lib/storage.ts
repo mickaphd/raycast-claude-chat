@@ -14,12 +14,11 @@ export interface Conversation {
   // Claude Code session used with `--resume` so the CLI keeps the context between turns.
   sessionId?: string;
   turns: Turn[];
-  updatedAt: number;
 }
 
 const STORAGE_KEY = "conversations";
 
-export const newConversation = (): Conversation => ({ id: randomUUID(), turns: [], updatedAt: Date.now() });
+export const newConversation = (firstTurn: Turn): Conversation => ({ id: randomUUID(), turns: [firstTurn] });
 
 export const newTurn = (prompt: string): Turn => ({ id: randomUUID(), prompt, answer: "" });
 
@@ -32,6 +31,5 @@ export async function loadConversations(): Promise<Conversation[]> {
 }
 
 export async function saveConversations(conversations: Conversation[]): Promise<void> {
-  // The empty draft conversation is a placeholder for the next prompt, not history.
-  await LocalStorage.setItem(STORAGE_KEY, JSON.stringify(conversations.filter((c) => c.turns.length > 0)));
+  await LocalStorage.setItem(STORAGE_KEY, JSON.stringify(conversations));
 }

@@ -78,13 +78,6 @@
               "value": "max"
             }
           ]
-        },
-        {
-          "name": "systemPrompt",
-          "title": "System Prompt",
-          "description": "Replaces the default system prompt",
-          "type": "textfield",
-          "required": false
         }
       ]
     },

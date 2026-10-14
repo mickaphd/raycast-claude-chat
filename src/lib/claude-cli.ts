@@ -50,10 +50,11 @@ export interface RunHandle {
 }
 
 function buildArgs(options: RunOptions): string[] {
-  // Plain chat: only web tools (no file/shell), no user/project settings, hooks or MCP servers, and "/foo" is not a skill.
-  const args = ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages"];
+  // The chat streams word by word with web tools only; one-shot commands get no tools and just the final result.
+  // Neither loads user/project settings, hooks or MCP servers, and "/foo" is never treated as a skill.
+  const args = ["-p", "--output-format", "stream-json", "--verbose"];
   if (options.ephemeral) args.push("--tools", "", "--no-session-persistence");
-  else args.push("--tools", WEB_TOOLS, "--allowedTools", WEB_TOOLS);
+  else args.push("--include-partial-messages", "--tools", WEB_TOOLS, "--allowedTools", WEB_TOOLS);
   args.push("--setting-sources", "", "--strict-mcp-config", "--disable-slash-commands");
   // An empty string still replaces Claude Code's own (coding agent) system prompt.
   if (options.systemPrompt !== undefined) args.push("--system-prompt", options.systemPrompt);
@@ -105,7 +106,6 @@ export function runClaude(options: RunOptions, callbacks: Partial<RunCallbacks> 
     let text = "";
     let sessionId: string | undefined;
     let result: { isError: boolean; text: string } | undefined;
-    let limitMessage: string | undefined;
     let buffer = "";
     let stderr = "";
 
@@ -121,13 +121,6 @@ export function runClaude(options: RunOptions, callbacks: Partial<RunCallbacks> 
           text += delta.text;
           callbacks.onText?.(text);
         }
-      } else if (event.type === "rate_limit_event") {
-        const info = event.rate_limit_info as { status?: string; resetsAt?: number } | undefined;
-        if (info?.status !== "rejected") return;
-        const time = info.resetsAt
-          ? ` It resets at ${new Date(info.resetsAt * 1000).toLocaleTimeString([], { timeStyle: "short" })}.`
-          : "";
-        limitMessage = `You've reached your Claude usage limit.${time}`;
       } else if (event.type === "result") {
         const errors = Array.isArray(event.errors) ? event.errors.join("\n") : "";
         result = { isError: event.is_error === true, text: typeof event.result === "string" ? event.result : errors };
@@ -160,7 +153,6 @@ export function runClaude(options: RunOptions, callbacks: Partial<RunCallbacks> 
       if (aborted) return reject(new ClaudeError("Stopped", "aborted"));
       // Prefer the streamed text (keeps paragraph breaks between tool calls) over the summary result.
       if (result && !result.isError) return resolve({ text: text || result.text, sessionId });
-      if (limitMessage) return reject(new ClaudeError(limitMessage, "other"));
       const message = (result?.text || stderr || `Claude exited with code ${code}`).trim();
       reject(new ClaudeError(message, classifyError(message)));
     });

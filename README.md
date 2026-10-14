@@ -43,7 +43,7 @@ claude setup-token
 
 Approve access in the browser and copy the whole `sk-ant-oat01-…` token (some terminals add spaces when copying; they are stripped). The token is valid for one year and can be revoked in claude.ai → Settings → Claude Code → Authorization tokens. Raycast stores it encrypted; it never leaves your Mac except to authenticate with Anthropic.
 
-<p align="center"><img src="media/preferences.png" width="550" alt="Extension preferences: OAuth token, then model, effort and system prompt per command"></p>
+<p align="center"><img src="media/preferences.png" width="550" alt="Extension preferences: OAuth token, then model and effort per command"></p>
 
 ## How it works
 
