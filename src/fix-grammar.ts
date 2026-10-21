@@ -61,8 +61,9 @@ export default async function FixGrammar() {
 }
 
 function failureMessage(error: unknown, hasToken: boolean): string {
-  if (error instanceof ClaudeError && error.kind === "aborted")
+  if (error instanceof ClaudeError && error.kind === "aborted") {
     return `Fix timed out after ${TIMEOUT_MS / 1000} seconds`;
+  }
   if (error instanceof ClaudeError && error.kind === "auth") {
     return hasToken
       ? "Claude rejected the OAuth token: create a new one with claude setup-token"

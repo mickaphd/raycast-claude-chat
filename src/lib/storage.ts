@@ -13,12 +13,28 @@ export interface Conversation {
   id: string;
   // Claude Code session used with `--resume` so the CLI keeps the context between turns.
   sessionId?: string;
+  // Conversations started by the Translate command get their own icon in the list.
+  kind?: "translate";
   turns: Turn[];
+}
+
+// What Translate hands to Ask Claude: a message to send (or text to prefill the search bar with) and the model and
+// effort to answer it with.
+export interface ChatLaunch {
+  prompt?: string;
+  draft?: string;
+  kind?: Conversation["kind"];
+  model?: string;
+  effort?: string;
 }
 
 const STORAGE_KEY = "conversations";
 
-export const newConversation = (firstTurn: Turn): Conversation => ({ id: randomUUID(), turns: [firstTurn] });
+export const newConversation = (firstTurn: Turn, kind?: Conversation["kind"]): Conversation => ({
+  id: randomUUID(),
+  kind,
+  turns: [firstTurn],
+});
 
 export const newTurn = (prompt: string): Turn => ({ id: randomUUID(), prompt, answer: "" });
 

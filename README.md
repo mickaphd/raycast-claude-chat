@@ -2,11 +2,11 @@
 
 # Claude Chat for Raycast
 
-Chat with Claude from Raycast on your **Claude Pro or Max subscription**, without an API key.
+Chat with Claude, translate and fix grammar from Raycast on your **Claude Pro or Max subscription**, without an API key.
 The extension runs the official [Claude Code](https://code.claude.com) CLI in headless mode (`claude -p`), so usage counts toward your plan's limits, never per-token API billing.
 
 > [!IMPORTANT]
-> This is an unofficial extension and it isn't published on the Raycast Store, where it would most likely be rejected: it lets you chat with Claude without an API key or a Raycast Pro subscription, and its Fix Grammar command recreates Raycast's own Fix Spelling and Grammar AI command. It works with a free Raycast account.
+> This is an unofficial extension and it isn't published on the Raycast Store, where it would most likely be rejected: it lets you chat with Claude without an API key or a Raycast Pro subscription, and its Translate and Fix Grammar commands recreate Raycast's own Translator and Fix Spelling and Grammar AI command. It works with a free Raycast account.
 
 ![Ask Claude: conversations on the left, the selected one on the right](media/chat.png)
 
@@ -14,9 +14,10 @@ The extension runs the official [Claude Code](https://code.claude.com) CLI in he
 
 - **Ask Claude**: a chat with your conversation history. Conversations are listed on the left, the selected one on the right (latest exchange first). Type in the search bar and press `↵`. Web search is available.
   `⌘N` new conversation · `⌘.` stop · `⌘⇧C` copy the conversation · `⌘⇧V` paste the last answer · `⌃X` delete the conversation.
+- **Translate**: select text in any app and run the command (give it a hotkey). The chat opens on a new conversation that translates it into your **Target Language** (French by default, any language works), with its own model and effort settings (Sonnet and Low by default, for speed). Since it's a chat, you can follow up: "in Spanish instead", "more formal"… Without a selection, the chat opens with the instruction ready for you to type or paste a text. Translations are marked with their own icon in the conversation list.
 - **Fix Grammar**: select text in any app and run the command (give it a hotkey). The corrected text replaces the selection without opening Raycast, in about a second. It uses Raycast's own Fix Spelling and Grammar prompt, with Haiku by default.
 
-![Both commands in Raycast's root search](media/commands.png)
+![The three commands in Raycast's root search](media/commands.png)
 
 ## Requirements
 
@@ -43,7 +44,7 @@ claude setup-token
 
 Approve access in the browser and copy the whole `sk-ant-oat01-…` token (some terminals add spaces when copying; they are stripped). The token is valid for one year and can be revoked in claude.ai → Settings → Claude Code → Authorization tokens. Raycast stores it encrypted; it never leaves your Mac except to authenticate with Anthropic.
 
-<p align="center"><img src="media/preferences.png" width="550" alt="Extension preferences: OAuth token, then model and effort per command"></p>
+<p align="center"><img src="media/preferences.png" width="550" alt="Extension preferences: the OAuth token, then the settings of each command"></p>
 
 ## How it works
 

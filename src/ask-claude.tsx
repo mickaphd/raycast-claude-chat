@@ -19,13 +19,24 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { ClaudeError, RunHandle, runClaude } from "./lib/claude-cli";
 import { conversationTitle, conversationToMarkdown, threadMarkdown, transcriptPrompt } from "./lib/markdown";
-import { Conversation, Turn, loadConversations, newConversation, newTurn, saveConversations } from "./lib/storage";
+import {
+  ChatLaunch,
+  Conversation,
+  Turn,
+  loadConversations,
+  newConversation,
+  newTurn,
+  saveConversations,
+} from "./lib/storage";
 
 const SYSTEM_PROMPT =
   "You are Claude, a helpful AI assistant made by Anthropic. The user is chatting with you from Raycast, a macOS launcher. " +
-  "Format answers in Markdown. Be clear and reasonably concise. Reply in the language the user writes in.";
+  "Format answers in Markdown. Be clear and reasonably concise. Reply in the language the user writes in. " +
+  "When asked to translate a text, reply with the translation only, unless asked for more.";
 
 const RENDER_THROTTLE_MS = 80;
+// How long after creating a conversation a selection reported by Raycast is treated as its own, not the user's.
+const PIN_MS = 1000;
 
 const WELCOME =
   "## New conversation\n\n" +
@@ -63,15 +74,22 @@ function errorMarkdown(error: unknown, hasToken: boolean): string {
   return `${help}\n\n\`\`\`\n${error.message}\n\`\`\``;
 }
 
-export default function AskClaude(props: LaunchProps) {
+export default function AskClaude(props: LaunchProps<{ launchContext?: ChatLaunch }>) {
   const preferences = getPreferenceValues<Preferences.AskClaude>();
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  // Not passed to List as isLoading: Raycast ignores selection changes made while loading. Loading takes milliseconds.
   const [isLoaded, setIsLoaded] = useState(false);
   const [currentId, setCurrentId] = useState(NEW_ID);
   const [searchText, setSearchText] = useState("");
   const [streamingTurnId, setStreamingTurnId] = useState<string>();
   const [status, setStatus] = useState<string>();
   const runRef = useRef<RunHandle>(undefined);
+  // Translate's launch (kind, model, effort), applied to the next conversation created, typed or sent at launch.
+  const pendingLaunch = useRef(props.launchContext);
+  // A conversation just created and selected by code, and until when Raycast may still override that selection.
+  const pinned = useRef<{ id: string; until: number }>(undefined);
+  const latest = useRef(conversations);
+  latest.current = conversations;
 
   const current = conversations.find((c) => c.id === currentId);
 
@@ -80,11 +98,21 @@ export default function AskClaude(props: LaunchProps) {
     loadConversations().then((stored) => {
       setConversations(stored);
       setIsLoaded(true);
-      const fallback = props.fallbackText?.trim();
-      if (fallback) send(fallback);
     });
-    return () => runRef.current?.abort();
+    return () => {
+      runRef.current?.abort();
+      // Saving normally waits for the answer to end; closing the chat mid-answer (e.g. a new Translate) mustn't lose it.
+      if (latest.current.length > 0) saveConversations(latest.current);
+    };
   }, []);
+
+  // Send the launch message (from Translate or a fallback search) once the history is loaded.
+  useEffect(() => {
+    if (!isLoaded) return;
+    const prompt = props.launchContext?.prompt ?? props.fallbackText?.trim();
+    if (prompt) send(prompt);
+    else if (props.launchContext?.draft) setSearchText(props.launchContext.draft);
+  }, [isLoaded]);
 
   // Persist outside of streaming: saving on every token would be wasteful.
   useEffect(() => {
@@ -107,13 +135,16 @@ export default function AskClaude(props: LaunchProps) {
     }
     const turn = newTurn(prompt);
     const previousTurns = existing?.turns.filter((t) => t.id !== retryTurnId) ?? [];
-    const conversation = existing ?? newConversation(turn);
+    const launch = existing ? undefined : pendingLaunch.current;
+    if (!existing) pendingLaunch.current = undefined;
+    const conversation = existing ?? newConversation(turn, launch?.kind);
     if (existing) {
       update(conversation.id, () => ({ turns: [...previousTurns, turn] }));
     } else {
       // Newest first; replies don't reorder, so the list never shifts under the selection.
       setConversations((list) => [conversation, ...list]);
       setCurrentId(conversation.id);
+      pinned.current = { id: conversation.id, until: Date.now() + PIN_MS };
     }
     setSearchText("");
     setStreamingTurnId(turn.id);
@@ -136,8 +167,8 @@ export default function AskClaude(props: LaunchProps) {
           prompt: text,
           cwd: environment.supportPath,
           sessionId,
-          model: preferences.model,
-          effort: preferences.effort,
+          model: launch?.model ?? preferences.model,
+          effort: launch?.effort ?? preferences.effort,
           systemPrompt: `${SYSTEM_PROMPT}\n\n${currentContext()}`,
           // Terminals often insert spaces or line breaks when copying the wrapped token.
           oauthToken: preferences.oauthToken?.replace(/\s+/g, ""),
@@ -276,15 +307,16 @@ export default function AskClaude(props: LaunchProps) {
 
   function icon(conversation: Conversation) {
     const lastTurn = conversation.turns.at(-1);
-    if (lastTurn?.id === streamingTurnId) return { source: Icon.SpeechBubbleActive, tintColor: Color.Orange };
+    const isTranslation = conversation.kind === "translate";
+    if (lastTurn?.id === streamingTurnId) {
+      return { source: isTranslation ? Icon.Globe : Icon.SpeechBubbleActive, tintColor: Color.Orange };
+    }
     if (lastTurn?.error && !lastTurn.answer) return { source: Icon.ExclamationMark, tintColor: Color.Red };
-    return Icon.Bubble;
+    return isTranslation ? Icon.Globe : Icon.Bubble;
   }
 
   return (
     <List
-      // Not tied to streaming: Raycast ignores selection changes made while loading, then reselects the first item.
-      isLoading={!isLoaded}
       filtering={false}
       searchText={searchText}
       onSearchTextChange={setSearchText}
@@ -292,7 +324,15 @@ export default function AskClaude(props: LaunchProps) {
       navigationTitle={["Claude", modelName(preferences.model)].filter(Boolean).join(" · ")}
       isShowingDetail
       selectedItemId={currentId}
-      onSelectionChange={(id) => id && setCurrentId(id)}
+      onSelectionChange={(id) => {
+        if (!id) return;
+        setCurrentId(id);
+        // When a conversation is created without the search text changing (Translate), Raycast keeps its previous
+        // selection and reports it. Asking again, once the list has settled, makes it select the new conversation.
+        const pin = pinned.current;
+        pinned.current = undefined;
+        if (pin && id !== pin.id && Date.now() < pin.until) setTimeout(() => setCurrentId(pin.id), 50);
+      }}
     >
       <List.Item
         id={NEW_ID}
