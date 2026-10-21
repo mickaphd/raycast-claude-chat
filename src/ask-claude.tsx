@@ -117,6 +117,9 @@ export default function AskClaude(props: LaunchProps) {
     }
     setSearchText("");
     setStreamingTurnId(turn.id);
+    // Raycast's native spinner, also used to show what Claude is doing (thinking, searching the web…).
+    const answering = "Claude is answering…";
+    const toast = showToast({ style: Toast.Style.Animated, title: answering });
 
     let pendingText: string | undefined;
     let flushTimer: NodeJS.Timeout | undefined;
@@ -144,7 +147,10 @@ export default function AskClaude(props: LaunchProps) {
             pendingText = fullText;
             flushTimer ??= setTimeout(flush, RENDER_THROTTLE_MS);
           },
-          onStatus: setStatus,
+          onStatus: (next) => {
+            setStatus(next);
+            toast.then((t) => (t.title = next ?? answering));
+          },
         },
       );
       return runRef.current.promise;
@@ -165,6 +171,7 @@ export default function AskClaude(props: LaunchProps) {
       flush();
       updateTurn(conversation.id, turn.id, { error: errorMarkdown(error, Boolean(preferences.oauthToken?.trim())) });
     } finally {
+      toast.then((t) => t.hide());
       runRef.current = undefined;
       setStreamingTurnId(undefined);
       setStatus(undefined);
@@ -269,7 +276,7 @@ export default function AskClaude(props: LaunchProps) {
 
   function icon(conversation: Conversation) {
     const lastTurn = conversation.turns.at(-1);
-    if (lastTurn?.id === streamingTurnId) return { source: Icon.CircleProgress, tintColor: Color.Orange };
+    if (lastTurn?.id === streamingTurnId) return { source: Icon.SpeechBubbleActive, tintColor: Color.Orange };
     if (lastTurn?.error && !lastTurn.answer) return { source: Icon.ExclamationMark, tintColor: Color.Red };
     return Icon.Bubble;
   }
@@ -282,7 +289,7 @@ export default function AskClaude(props: LaunchProps) {
       searchText={searchText}
       onSearchTextChange={setSearchText}
       searchBarPlaceholder={current ? "Reply to this conversation…" : "Ask Claude anything…"}
-      navigationTitle={["Claude", modelName(preferences.model), status].filter(Boolean).join(" · ")}
+      navigationTitle={["Claude", modelName(preferences.model)].filter(Boolean).join(" · ")}
       isShowingDetail
       selectedItemId={currentId}
       onSelectionChange={(id) => id && setCurrentId(id)}
