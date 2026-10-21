@@ -49,18 +49,20 @@ Approve access in the browser and copy the whole `sk-ant-oat01-…` token (some 
 
 - Each message spawns `claude -p --output-format stream-json` and streams the answer into Raycast. Context is kept with `--resume <session_id>`; if Claude Code has deleted the session, the history is replayed in the prompt.
 - Claude Code's file and shell tools, settings, hooks, MCP servers and system prompt are disabled or replaced, so it behaves as a plain assistant. Only web search and web fetch stay available in the chat; Fix Grammar has no tools at all.
-- Telemetry, error reporting, update checks and claude.ai connector lookups are turned off, and any `ANTHROPIC_API_KEY`, auth token or custom endpoint is removed from the environment: each message is a single request to Anthropic.
+- Telemetry, error reporting, update checks and claude.ai connector lookups are turned off, and any `ANTHROPIC_API_KEY`, auth token or custom endpoint is removed from the environment: each message is a single request to Anthropic, plus the web pages Claude fetches when a question needs them.
 - Conversations are stored locally in Raycast. Claude Code also keeps chat sessions in `~/.claude/projects/`; Fix Grammar keeps nothing.
 
 ## Uninstall
 
 1. In Raycast, open **Settings → Extensions**, right-click **Claude Chat** and choose **Uninstall**. This also deletes its conversations and preferences, including the token.
 2. Revoke the token in claude.ai → Settings → Claude Code → Authorization tokens (the row with only the `user:inference` scope).
-3. Optionally, delete the chat sessions Claude Code kept on disk and the cloned folder:
+3. Optionally, delete the chat sessions Claude Code kept on disk:
 
    ```bash
    rm -rf ~/.claude/projects/*com-raycast-macos-extensions-claude-code-chat
    ```
+
+4. Delete the cloned `raycast-claude-chat` folder.
 
 ## License
 
